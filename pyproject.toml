@@ -1,0 +1,10 @@
+[project]
+name = "agenticaidocumentation"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "google-genai>=1.18.0",
+    "gradio>=3.36.1",
+]
