@@ -4,9 +4,6 @@ from google import genai
 from google.genai import types
 import re
 
-# --- Configuration for Local Environment ---
-# Load environment variables from a .env file in the same directory.
-# This is the standard method for managing secrets in local development.
 API_KEY = os.environ.get("GOOGLE_API_KEY")
 
 if API_KEY:
@@ -41,28 +38,39 @@ initial_bpmn_xml = """<?xml version="1.0" encoding="UTF-8"?>
 # The HTML and JavaScript code to be injected into the Gradio app's <head>.
 head_html = f"""
 <head>
-    <!-- bpmn-js Viewer CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.0.2/dist/assets/bpmn-js.css">
-    <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.0.2/dist/assets/diagram-js.css">
+    <!-- bpmn-js Modeler CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/bpmn-js@18.6.2/dist/assets/bpmn-js.css">
+    <link rel="stylesheet" href="https://unpkg.com/bpmn-js@18.6.2/dist/assets/diagram-js.css">
+    <link rel="stylesheet" href="https://unpkg.com/bpmn-js@18.6.2/dist/assets/bpmn-font/css/bpmn.css">
 
-    <!-- bpmn-js Viewer JS -->
-    <script src="https://unpkg.com/bpmn-js@17.0.2/dist/bpmn-viewer.development.js"></script>
+    <!-- bpmn-js Modeler JS -->
+    <script src="https://unpkg.com/bpmn-js@18.6.2/dist/bpmn-modeler.development.js"></script>
 
     <style>
         .bpmn-container {{ height: 600px; border: 1px solid #eee; border-radius: 8px; background-color: #f9f9f9; }}
         #chatbot {{ height: 560px; overflow-y: auto; }}
         .bpmn-error {{ color: red; padding: 10px; background-color: #ffe6e6; border-radius: 4px; margin: 10px 0; }}
+        .bpmn-buttons {{ padding: 10px; display: flex; gap: 10px; }}
+        .bpmn-button {{ 
+            padding: 8px 16px; 
+            background-color: #1976d2; 
+            color: white; 
+            border: none; 
+            border-radius: 4px;
+            cursor: pointer;
+        }}
+        .bpmn-button:hover {{ background-color: #1565c0; }}
     </style>
 
     <script>
-        let bpmnViewer;
-        let isViewerInitialized = false;
+        let bpmnModeler;
+        let isModelerInitialized = false;
 
         async function renderBpmn(xml) {{
             console.log("renderBpmn called with XML length:", xml ? xml.length : 0);
             
-            if (!bpmnViewer) {{
-                console.error("BPMN Viewer not initialized.");
+            if (!bpmnModeler) {{
+                console.error("BPMN Modeler not initialized.");
                 return;
             }}
             
@@ -73,8 +81,8 @@ head_html = f"""
             
             try {{
                 console.log("Attempting to import XML:", xml.substring(0, 200) + "...");
-                await bpmnViewer.importXML(xml);
-                bpmnViewer.get('canvas').zoom('fit-viewport');
+                await bpmnModeler.importXML(xml);
+                bpmnModeler.get('canvas').zoom('fit-viewport');
                 console.log("BPMN diagram rendered successfully.");
                 
                 // Remove any error messages
@@ -97,12 +105,52 @@ head_html = f"""
             }}
         }}
 
-        function initializeBpmnViewer() {{
+        async function saveXML() {{
             try {{
-                console.log("Initializing BPMN Viewer...");
-                bpmnViewer = new BpmnJS({{ container: '#bpmn-canvas' }});
-                isViewerInitialized = true;
-                console.log("BPMN Viewer initialized successfully");
+                const result = await bpmnModeler.saveXML({{ format: true }});
+                console.log("Current BPMN XML:", result.xml);
+                
+                // Update the hidden textarea with the new XML
+                const xmlOutputElement = document.getElementById('bpmn_xml_output');
+                if (xmlOutputElement && xmlOutputElement.querySelector('textarea')) {{
+                    const textarea = xmlOutputElement.querySelector('textarea');
+                    textarea.value = result.xml;
+                    
+                    // Trigger change event so Gradio recognizes the change
+                    const event = new Event('input', {{ bubbles: true }});
+                    textarea.dispatchEvent(event);
+                    
+                    console.log("XML updated in the hidden field");
+                }}
+                
+                alert("Diagram saved!");
+            }} catch (err) {{
+                console.error("Error saving BPMN XML:", err);
+                alert("Failed to save diagram: " + err.message);
+            }}
+        }}
+
+        function initializeBpmnModeler() {{
+            try {{
+                console.log("Initializing BPMN Modeler...");
+                bpmnModeler = new BpmnJS({{
+                    container: '#bpmn-canvas'
+                }});
+                isModelerInitialized = true;
+                console.log("BPMN Modeler initialized successfully");
+                
+                // Add buttons to the container
+                const container = document.getElementById('bpmn-container');
+                const buttonsDiv = document.createElement('div');
+                buttonsDiv.className = 'bpmn-buttons';
+                
+                const saveButton = document.createElement('button');
+                saveButton.className = 'bpmn-button';
+                saveButton.textContent = 'Save Diagram';
+                saveButton.onclick = saveXML;
+                buttonsDiv.appendChild(saveButton);
+                
+                container.parentNode.insertBefore(buttonsDiv, container.nextSibling);
                 
                 // Render initial XML
                 const xmlOutputElement = document.getElementById('bpmn_xml_output');
@@ -113,7 +161,7 @@ head_html = f"""
                     }}
                 }}
             }} catch (err) {{
-                console.error("Failed to initialize BPMN Viewer:", err);
+                console.error("Failed to initialize BPMN Modeler:", err);
             }}
         }}
 
@@ -127,7 +175,7 @@ head_html = f"""
                     const textarea = xmlOutputElement.querySelector('textarea');
                     if (textarea) {{
                         const newXml = textarea.value;
-                        if (newXml && newXml.trim().length > 0 && isViewerInitialized) {{
+                        if (newXml && newXml.trim().length > 0 && isModelerInitialized) {{
                             console.log("New XML detected, rendering...");
                             renderBpmn(newXml);
                         }}
@@ -150,8 +198,8 @@ head_html = f"""
         function setupBpmn() {{
             console.log("Setting up BPMN components...");
             
-            // Initialize viewer first
-            initializeBpmnViewer();
+            // Initialize modeler first
+            initializeBpmnModeler();
             
             // Then setup the watcher
             setTimeout(() => {{
@@ -170,7 +218,7 @@ head_html = f"""
 
         // Fallback initialization
         setTimeout(() => {{
-            if (!isViewerInitialized) {{
+            if (!isModelerInitialized) {{
                 console.log("Fallback initialization triggered");
                 setupBpmn();
             }}
@@ -193,11 +241,21 @@ def get_bpmn_from_gemini(user_prompt, chat_history):
     instructional_prompt = """
     You are an expert in Business Process Model and Notation (BPMN).
     Your task is to take a user's description of a business process and convert it into a valid BPMN 2.0 XML format.
-    Generate only the raw XML code. Do not include any other text, explanations, or markdown code fences like ```xml.
-    The output must be a single, raw XML block, ready to be rendered by a BPMN viewer.
-    Ensure all elements have unique IDs and are placed on the diagram plane (BPMNDiagram).
-    Include proper BPMNShape elements with bounds for all process elements.
-    Start with <?xml version="1.0" encoding="UTF-8"?> and include all required namespaces.
+    
+    CRITICAL REQUIREMENTS:
+    1. Generate ONLY the raw XML code. Do not include any other text, explanations, or markdown code fences.
+    2. The XML MUST start with <?xml version="1.0" encoding="UTF-8"?>
+    3. The XML MUST contain a bpmn:definitions element as the root, with all required namespaces:
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" 
+       xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+       xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+       xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+    4. Every process element MUST have a unique ID attribute
+    5. Every shape MUST have proper coordinates with dc:Bounds elements
+    6. Include a complete BPMNDiagram section with BPMNPlane and BPMNShape elements
+    
+    The final XML should be fully compatible with bpmn-js modeler for editing.
     """
 
     try:
@@ -250,9 +308,9 @@ def get_bpmn_from_gemini(user_prompt, chat_history):
         return chat_history, initial_bpmn_xml
 
 # Define the Gradio interface
-with gr.Blocks(head=head_html, title="BPMN Chatbot with Gemini") as demo:
-    gr.Markdown("# 🤖 BPMN Generation Chatbot (Gemini Edition)")
-    gr.Markdown("Describe a business process, and the Gemini LLM will generate a BPMN diagram for you.")
+with gr.Blocks(head=head_html, title="BPMN Chatbot") as demo:
+    gr.Markdown("# 🤖 BPMN Generation Chatbot")
+    gr.Markdown("Describe a business process, and the AI will generate a BPMN diagram for you.")
 
     with gr.Row():
         with gr.Column(scale=1):
@@ -263,28 +321,87 @@ with gr.Blocks(head=head_html, title="BPMN Chatbot with Gemini") as demo:
             )
             user_input = gr.Textbox(
                 show_label=False,
-                placeholder="e.g., A customer places an order for a pizza, we check availability of ingredients and allergy specifications, then bake, package and deliver the product"
+                placeholder="e.g., A customer places an order for a pizza, we check availability of ingredients and allergy specifications, then bake, package and deliver the product. The customer can opt to pay when the pizza is delivered or during the online ordering process itself.",
             )
             submit_btn = gr.Button("Send", variant="primary")
 
         with gr.Column(scale=2):
-            gr.Markdown("## 🖼️ BPMN Diagram")
+            gr.Markdown("## 🖼️ BPMN Diagram Editor")
             gr.HTML('<div id="bpmn-canvas" class="bpmn-container"></div>')
+            
+            # Hidden field to store the current XML
             bpmn_xml_output = gr.Textbox(
                 value=initial_bpmn_xml,
                 elem_id="bpmn_xml_output",
                 visible=False
             )
+            
+            # Add a button to download the BPMN XML
+            download_btn = gr.Button("📥 Download BPMN XML", variant="secondary")
+            
+            # Add a JavaScript snippet to handle downloading
+            gr.HTML("""
+            <script>
+                // Add event listener to download button
+                document.addEventListener('DOMContentLoaded', function() {
+                    setTimeout(function() {
+                        // Find the download button by traversing the DOM structure
+                        const buttons = document.querySelectorAll('button');
+                        let downloadBtn = null;
+                        
+                        for (const btn of buttons) {
+                            if (btn.textContent.includes('Download BPMN XML')) {
+                                downloadBtn = btn;
+                                break;
+                            }
+                        }
+                        
+                        if (downloadBtn) {
+                            console.log('Download button found, adding event listener');
+                            downloadBtn.addEventListener('click', function() {
+                                // Get the current XML from the BPMN modeler instead of the hidden field
+                                if (window.bpmnModeler) {
+                                    window.bpmnModeler.saveXML({ format: true })
+                                        .then(function(result) {
+                                            const xml = result.xml;
+                                            const blob = new Blob([xml], {type: 'application/xml'});
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement('a');
+                                            a.href = url;
+                                            a.download = 'bpmn-diagram.bpmn';
+                                            document.body.appendChild(a);
+                                            a.click();
+                                            document.body.removeChild(a);
+                                            URL.revokeObjectURL(url);
+                                        })
+                                        .catch(function(err) {
+                                            alert('Failed to export BPMN diagram: ' + err.message);
+                                        });
+                                } else {
+                                    alert('BPMN modeler not initialized');
+                                }
+                            });
+                        } else {
+                            console.error('Download button not found');
+                        }
+                    }, 2000);
+                });
+            </script>
+            """)
+
+    def clear_input_and_get_bpmn(user_prompt, chat_history):
+        chat_history, bpmn_xml = get_bpmn_from_gemini(user_prompt, chat_history)
+        return chat_history, bpmn_xml, ""
 
     submit_btn.click(
-        fn=get_bpmn_from_gemini,
+        fn=clear_input_and_get_bpmn,
         inputs=[user_input, chatbot],
-        outputs=[chatbot, bpmn_xml_output]
+        outputs=[chatbot, bpmn_xml_output, user_input]
     )
     user_input.submit(
-        fn=get_bpmn_from_gemini,
+        fn=clear_input_and_get_bpmn,
         inputs=[user_input, chatbot],
-        outputs=[chatbot, bpmn_xml_output]
+        outputs=[chatbot, bpmn_xml_output, user_input]
     )
 
 if __name__ == "__main__":
