@@ -229,44 +229,67 @@ head_html = f"""
 
 # --- Gradio UI and Backend Logic ---
 
-def get_bpmn_from_gemini(user_prompt, chat_history):
+def get_bpmn_from_gemini_internal(chat_history, chat_state, current_xml):
     """
-    Interacts with the Gemini API to generate BPMN and update the chat.
+    Internal function that interacts with the Gemini API to generate or modify BPMN.
     """
+    user_prompt = chat_history[-1][0]
+
     if not GEMINI_API_AVAILABLE or not client:
         error_message = "Google API key not found. Please create a .env file and add your GOOGLE_API_KEY."
-        chat_history.append((user_prompt, error_message))
-        return chat_history, initial_bpmn_xml
+        # Update the last message with the error
+        chat_history[-1] = (user_prompt, error_message)
+        return chat_history, initial_bpmn_xml, None
 
-    instructional_prompt = """
-    You are an expert in Business Process Model and Notation (BPMN).
-    Your task is to take a user's description of a business process and convert it into a valid BPMN 2.0 XML format.
-    
-    CRITICAL REQUIREMENTS:
-    1. Generate ONLY the raw XML code. Do not include any other text, explanations, or markdown code fences.
-    2. The XML MUST start with <?xml version="1.0" encoding="UTF-8"?>
-    3. The XML MUST contain a bpmn:definitions element as the root, with all required namespaces:
-       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-       xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" 
-       xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-       xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
-       xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-    4. Every process element MUST have a unique ID attribute
-    5. Every shape MUST have proper coordinates with dc:Bounds elements
-    6. Include a complete BPMNDiagram section with BPMNPlane and BPMNShape elements
-    
-    The final XML should be fully compatible with bpmn-js modeler for editing.
-    """
+    # Determine if this is the first turn or a follow-up
+    is_first_turn = chat_state is None
+
+    if is_first_turn:
+        instructional_prompt = """
+        You are an expert in Business Process Model and Notation (BPMN).
+        Your task is to take a user's description of a business process and convert it into a valid BPMN 2.0 XML format.
+        
+        CRITICAL REQUIREMENTS:
+        1. Generate ONLY the raw XML code. Do not include any other text, explanations, or markdown code fences.
+        2. The XML MUST start with <?xml version="1.0" encoding="UTF-8"?>
+        3. The XML MUST contain a bpmn:definitions element as the root, with all required namespaces:
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" 
+           xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+           xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+           xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+        4. Every process element MUST have a unique ID attribute
+        5. Every shape MUST have proper coordinates with dc:Bounds elements
+        6. Include a complete BPMNDiagram section with BPMNPlane and BPMNShape elements
+        
+        The final XML should be fully compatible with bpmn-js modeler for editing.
+        """
+        # Create a new chat session for the first turn
+        chat = client.chats.create(model="gemini-2.5-flash")
+        # Send the initial instructions
+        chat.send_message(instructional_prompt)
+        # The message to send is the user's initial prompt
+        message_to_send = user_prompt
+    else:
+        # Use the existing chat session
+        chat = chat_state
+        # For follow-up requests, provide the previous XML as context
+        message_to_send = f"""
+        The user wants to modify the existing BPMN diagram.
+        
+        Here is the current BPMN XML:
+        ```xml
+        {current_xml}
+        ```
+        
+        Please apply the following changes based on the user's request: "{user_prompt}"
+        
+        Return the complete, updated BPMN 2.0 XML. Remember to only output the raw XML code.
+        """
 
     try:
-        # Create a chat session
-        chat = client.chats.create(model="gemini-2.5-flash")
-        
-        # Send the instructional prompt first
-        chat.send_message(instructional_prompt)
-        
-        # Send the user's process description
-        response = chat.send_message(user_prompt)
+        # Send the user's message (either initial prompt or modification request)
+        response = chat.send_message(message_to_send)
         generated_xml = response.text if response.text else ""
         
         # Log the raw response from the model
@@ -298,17 +321,19 @@ def get_bpmn_from_gemini(user_prompt, chat_history):
                 print("WARNING: Generated XML doesn't contain BPMN definitions")
                 generated_xml = initial_bpmn_xml
 
-        chat_history.append((user_prompt, "Here is the BPMN diagram based on your description:"))
-        return chat_history, generated_xml if generated_xml else initial_bpmn_xml
+        chat_history[-1] = (user_prompt, "Here is the updated BPMN diagram based on your request:")
+        return chat_history, generated_xml if generated_xml else initial_bpmn_xml, chat
 
     except Exception as e:
         error_response = f"An error occurred with the Gemini API: {str(e)}"
         print(f"ERROR: {error_response}")
-        chat_history.append((user_prompt, error_response))
-        return chat_history, initial_bpmn_xml
+        # Update the last message with the error
+        chat_history[-1] = (user_prompt, error_response)
+        return chat_history, initial_bpmn_xml, chat_state
 
 # Define the Gradio interface
 with gr.Blocks(head=head_html, title="BPMN Chatbot") as demo:
+    chat_state = gr.State()
     gr.Markdown("# 🤖 BPMN Generation Chatbot")
     gr.Markdown("Describe a business process, and the AI will generate a BPMN diagram for you.")
 
@@ -389,19 +414,46 @@ with gr.Blocks(head=head_html, title="BPMN Chatbot") as demo:
             </script>
             """)
 
-    def clear_input_and_get_bpmn(user_prompt, chat_history):
-        chat_history, bpmn_xml = get_bpmn_from_gemini(user_prompt, chat_history)
-        return chat_history, bpmn_xml, ""
+    def clear_input_and_get_bpmn(user_prompt, chat_history, chat_state, current_xml):
+        if user_prompt.strip():
+            # Add user message to history, but with None for the bot response
+            chat_history.append((user_prompt, None))
+            # Yield the updated history to display the user message immediately
+            yield chat_history, current_xml, chat_state, ""
+
+            # Get the AI response
+            updated_history, bpmn_xml, new_chat_state = get_bpmn_from_gemini_internal(chat_history, chat_state, current_xml)
+            
+            # Yield the final result
+            yield updated_history, bpmn_xml, new_chat_state, ""
+        else:
+            # If input is empty, just yield the current state
+            yield chat_history, current_xml, chat_state, ""
+
+    # The .then() event listener is used to chain events.
+    # 1. The user's input is submitted.
+    # 2. add_user_message runs first, adding the user's prompt to the chat and clearing the input box.
+    # 3. get_ai_response runs second, taking the updated chat history to get the AI's reply.
+    user_input.submit(
+        fn=lambda u, c: (c + [[u, None]], ""),
+        inputs=[user_input, chatbot],
+        outputs=[chatbot, user_input],
+        queue=False
+    ).then(
+        fn=get_bpmn_from_gemini_internal,
+        inputs=[chatbot, chat_state, bpmn_xml_output],
+        outputs=[chatbot, bpmn_xml_output, chat_state]
+    )
 
     submit_btn.click(
-        fn=clear_input_and_get_bpmn,
+        fn=lambda u, c: (c + [[u, None]], ""),
         inputs=[user_input, chatbot],
-        outputs=[chatbot, bpmn_xml_output, user_input]
-    )
-    user_input.submit(
-        fn=clear_input_and_get_bpmn,
-        inputs=[user_input, chatbot],
-        outputs=[chatbot, bpmn_xml_output, user_input]
+        outputs=[chatbot, user_input],
+        queue=False
+    ).then(
+        fn=get_bpmn_from_gemini_internal,
+        inputs=[chatbot, chat_state, bpmn_xml_output],
+        outputs=[chatbot, bpmn_xml_output, chat_state]
     )
 
 if __name__ == "__main__":
