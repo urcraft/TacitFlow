@@ -25,6 +25,7 @@ initial_bpmn_xml = """<?xml version="1.0" encoding="UTF-8"?>
                   xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" 
                   xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" 
                   xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" 
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
                   xmlns:semantic="http://www.omg.org/spec/BPMN/20100524/MODEL"
                   targetNamespace="http://bpmn.io/schema/bpmn" 
                   id="Definitions_1">
@@ -48,15 +49,9 @@ head_html = f"""
     <link rel="stylesheet" href="https://unpkg.com/bpmn-js@18.6.2/dist/assets/bpmn-js.css">
     <link rel="stylesheet" href="https://unpkg.com/bpmn-js@18.6.2/dist/assets/diagram-js.css">
     <link rel="stylesheet" href="https://unpkg.com/bpmn-js@18.6.2/dist/assets/bpmn-font/css/bpmn.css">
-    
-    <!-- bpmn-js-embedded-comments CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/bpmn-js-embedded-comments@0.7.0/dist/assets/comments.css">
 
     <!-- bpmn-js Modeler JS -->
     <script src="https://unpkg.com/bpmn-js@18.6.2/dist/bpmn-modeler.development.js"></script>
-    
-    <!-- bpmn-js-embedded-comments JS -->
-    <script src="https://unpkg.com/bpmn-js-embedded-comments@0.7.0/dist/comments.js"></script>
 
     <style>
         .bpmn-container {{ height: 600px; border: 1px solid #eee; border-radius: 8px; background-color: #f9f9f9; }}
@@ -93,6 +88,7 @@ head_html = f"""
             
             try {{
                 console.log("Attempting to import XML:", xml.substring(0, 200) + "...");
+                
                 await bpmnModeler.importXML(xml);
                 bpmnModeler.get('canvas').zoom('fit-viewport');
                 console.log("BPMN diagram rendered successfully.");
@@ -123,43 +119,13 @@ head_html = f"""
             try {{
                 console.log("Initializing BPMN Modeler...");
                 
-                // Check if the embedded comments module is available
-                let additionalModules = [];
-                if (window.BpmnJSEmbeddedComments) {{
-                    additionalModules.push(window.BpmnJSEmbeddedComments);
-                    console.log("Embedded comments module found and added");
-                }} else {{
-                    console.warn("Embedded comments module not found, proceeding without comments support");
-                }}
-                
-                // Initialize BPMN modeler with or without comments module
+                // Initialize BPMN modeler
                 bpmnModeler = new BpmnJS({{
-                    container: '#bpmn-canvas',
-                    additionalModules: additionalModules
+                    container: '#bpmn-canvas'
                 }});
                 
                 isModelerInitialized = true;
-                console.log("BPMN Modeler initialized successfully" + (additionalModules.length > 0 ? " with comments support" : ""));
-                
-                // Add click listener to collapse comments when clicking on canvas (if comments module available)
-                bpmnModeler.on('canvas.click', function() {{
-                    try {{
-                        if (bpmnModeler.get && bpmnModeler.get('comments')) {{
-                            bpmnModeler.get('comments').collapseAll();
-                        }}
-                    }} catch (err) {{
-                        console.log("Comments module not available or error collapsing:", err);
-                    }}
-                }});
-                
-                // Add listeners for comment updates if available
-                try {{
-                    bpmnModeler.on('comments.updated', function() {{
-                        console.log('Comments updated');
-                    }});
-                }} catch (err) {{
-                    console.log("Could not add comments listener:", err);
-                }}
+                console.log("BPMN Modeler initialized successfully");
                 
                 // Render initial XML
                 const xmlOutputElement = document.getElementById('bpmn_xml_output');
@@ -255,15 +221,14 @@ def get_bpmn_from_gemini_internal(chat_history, chat_state, current_xml):
 
     if is_first_turn:
         instructional_prompt = """
-        You are an expert in Business Process Model and Notation (BPMN) and process improvement.
+        You are an expert in Business Process Model and Notation (BPMN) diagram creation.
         
-        Based on the user's request, you can perform one of three actions:
+        Based on the user's request, you can perform one of two actions:
         
         1. **CREATE**: Generate a new BPMN diagram from a business process description
         2. **MODIFY**: Update an existing BPMN diagram based on requested changes
-        3. **ANALYZE**: Add strategic comments to an existing diagram for AS-IS to TO-BE transformation
         
-        CRITICAL XML REQUIREMENTS (for all actions):
+        CRITICAL XML REQUIREMENTS:
         - Generate ONLY the raw XML code. No explanations, text, or markdown code fences.
         - XML MUST start with <?xml version="1.0" encoding="UTF-8"?>
         - Include all required namespaces in bpmn:definitions:
@@ -272,21 +237,10 @@ def get_bpmn_from_gemini_internal(chat_history, chat_state, current_xml):
           xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
           xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
           xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-          xmlns:semantic="http://www.omg.org/spec/BPMN/20100524/MODEL"
         - Every process element MUST have unique ID attributes
         - Include complete BPMNDiagram section with proper coordinates
-        
-        FOR ANALYSIS/COMMENTS:
-        When the user asks for analysis, review, comments, feedback, or improvement suggestions, add descriptive (not prescriptive) comments using:
-        
-        <semantic:documentation textFormat="text/x-comments">
-            :Your observation about potential improvements --analyst
-        </semantic:documentation>
-        
-        Focus comments on: bottlenecks, optimization opportunities, missing info, resource issues, decision clarity, compliance risks, automation potential.
-        Add 3-7 strategic comments to help identify AS-IS to TO-BE transformation opportunities.
-        
-        The XML should be fully compatible with bpmn-js modeler and embedded comments extension.
+        - Use appropriate BPMN elements: startEvent, endEvent, task, userTask, serviceTask, exclusiveGateway, parallelGateway, sequenceFlow, etc.
+        - Ensure proper layout with realistic coordinates for visual clarity
         """
         # Create a new chat session for the first turn
         chat = client.chats.create(model="gemini-2.5-pro")
@@ -308,7 +262,6 @@ def get_bpmn_from_gemini_internal(chat_history, chat_state, current_xml):
         
         Based on this request, determine whether to:
         - MODIFY the existing diagram with the requested changes
-        - ANALYZE the diagram by adding strategic improvement comments
         - CREATE a completely new diagram if requested
         
         Return the complete, updated BPMN 2.0 XML. Remember to only output the raw XML code.
@@ -365,23 +318,24 @@ def get_bpmn_from_gemini_internal(chat_history, chat_state, current_xml):
 with gr.Blocks(head=head_html, title="BPMN Chatbot") as demo:
     chat_state = gr.State()
     gr.Markdown("# 🤖 BPMN Generation Chatbot")
-    gr.Markdown("Describe a business process to generate a BPMN diagram. Once you have a model, ask for comments or analysis to identify improvement opportunities for AS-IS to TO-BE transformation.")
+    gr.Markdown("Describe a business process and I'll create a BPMN diagram for you. You can also ask me to modify existing diagrams with specific changes.")
 
     with gr.Row():
         with gr.Column(scale=1):
             gr.Markdown("## 💬 Chat")
             chatbot = gr.Chatbot(
                 elem_id="chatbot",
-                value=[(None, "Hello! I can help you design business processes in two ways:\n\n1. **Generate BPMN diagrams**: Describe your business process and I'll create a BPMN diagram\n2. **Add strategic comments**: Once you have a diagram, ask me to 'analyze', 'comment', or 'review' it and I'll add analytical comments to help you identify improvement opportunities for AS-IS to TO-BE transformation.\n\nHow can I help you today?")]
+                value=[(None, "Hello! I can help you design business processes by creating BPMN diagrams.\n\n**How to use:**\n1. **Generate BPMN diagrams**: Describe your business process and I'll create a BPMN diagram\n2. **Modify diagrams**: Once you have a diagram, ask me to make specific changes\n\nHow can I help you today?")]
             )
             user_input = gr.Textbox(
                 show_label=False,
-                placeholder="e.g., 'A customer places an order for a pizza...' or 'Please analyze this process and add comments for improvement'",
+                placeholder="e.g., 'A customer places an order for a pizza...' or 'Please add a payment step after order confirmation'",
             )
             submit_btn = gr.Button("Send", variant="primary")
 
-        with gr.Column(scale=3):
+        with gr.Column(scale=6):
             gr.Markdown("## 🖼️ BPMN Diagram Editor")
+            
             gr.HTML('<div id="bpmn-canvas" class="bpmn-container"></div>')
             
             # Hidden field to store the current XML
