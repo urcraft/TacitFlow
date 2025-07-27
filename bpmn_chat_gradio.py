@@ -229,6 +229,13 @@ def get_bpmn_from_gemini_internal(chat_history, chat_state, current_xml):
         1. **CREATE**: Generate a new BPMN diagram from a business process description
         2. **MODIFY**: Update an existing BPMN diagram based on requested changes
         
+        IMPORTANT DESIGN PRINCIPLES:
+        - Create ONLY what the user explicitly describes - do not add extra steps, decisions, or processes
+        - Use the simplest BPMN elements that accurately represent the described process
+        - If the user mentions specific roles, systems, or decision points, include those; otherwise keep it minimal
+        - Stick to the linear flow described unless the user explicitly mentions parallel paths or complex logic
+        - Do not assume additional business rules, validations, or error handling unless mentioned
+        
         CRITICAL XML REQUIREMENTS:
         - Generate ONLY the raw XML code. No explanations, text, or markdown code fences.
         - XML MUST start with <?xml version="1.0" encoding="UTF-8"?>
@@ -345,59 +352,6 @@ with gr.Blocks(head=head_html, title="BPMN Chatbot") as demo:
                 elem_id="bpmn_xml_output",
                 visible=False
             )
-            
-            # Add a button to download the BPMN XML
-            download_btn = gr.Button("📥 Download BPMN XML", variant="secondary")
-            
-            # Add a JavaScript snippet to handle downloading
-            gr.HTML("""
-            <script>
-                // Add event listener to download button
-                document.addEventListener('DOMContentLoaded', function() {
-                    setTimeout(function() {
-                        // Find the download button by traversing the DOM structure
-                        const buttons = document.querySelectorAll('button');
-                        let downloadBtn = null;
-                        
-                        for (const btn of buttons) {
-                            if (btn.textContent.includes('Download BPMN XML')) {
-                                downloadBtn = btn;
-                                break;
-                            }
-                        }
-                        
-                        if (downloadBtn) {
-                            console.log('Download button found, adding event listener');
-                            downloadBtn.addEventListener('click', function() {
-                                // Get the current XML from the BPMN modeler instead of the hidden field
-                                if (window.bpmnModeler) {
-                                    window.bpmnModeler.saveXML({ format: true })
-                                        .then(function(result) {
-                                            const xml = result.xml;
-                                            const blob = new Blob([xml], {type: 'application/xml'});
-                                            const url = URL.createObjectURL(blob);
-                                            const a = document.createElement('a');
-                                            a.href = url;
-                                            a.download = 'bpmn-diagram.bpmn';
-                                            document.body.appendChild(a);
-                                            a.click();
-                                            document.body.removeChild(a);
-                                            URL.revokeObjectURL(url);
-                                        })
-                                        .catch(function(err) {
-                                            alert('Failed to export BPMN diagram: ' + err.message);
-                                        });
-                                } else {
-                                    alert('BPMN modeler not initialized');
-                                }
-                            });
-                        } else {
-                            console.error('Download button not found');
-                        }
-                    }, 2000);
-                });
-            </script>
-            """)
 
     # The .then() event listener is used to chain events.
     # 1. The user's input is submitted.
