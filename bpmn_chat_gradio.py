@@ -4,17 +4,18 @@ from google import genai
 from google.genai import types
 import re
 
-API_KEY = os.environ.get("GOOGLE_API_KEY")
+# Use GEMINI_FREE_API_KEY for free tier access
+# If you have a paid tier, you can use "GEMINI_API_KEY" instead
+API_KEY = os.environ.get("GEMINI_FREE_API_KEY") 
 
 if API_KEY:
-    os.environ["GOOGLE_API_KEY"] = API_KEY
-    client = genai.Client()
+    client = genai.Client(api_key=API_KEY)
     GEMINI_API_AVAILABLE = True
-    print("Successfully loaded GOOGLE_API_KEY from .env file or environment variables.")
+    print("Successfully loaded GEMINI_API_KEY from .env file or environment variables.")
 else:
     client = None
     GEMINI_API_AVAILABLE = False
-    print("WARNING: GOOGLE_API_KEY not found. Please create a .env file and add your key.")
+    print("WARNING: GEMINI_API_KEY not found. Please create a .env file and add your key.")
 
 
 # --- BPMN and JS Integration ---
@@ -211,7 +212,7 @@ def get_bpmn_from_gemini_internal(chat_history, chat_state, current_xml):
     user_prompt = chat_history[-1][0]
 
     if not GEMINI_API_AVAILABLE or not client:
-        error_message = "Google API key not found. Please create a .env file and add your GOOGLE_API_KEY."
+        error_message = "Google API key not found. Please create a .env file and add your GEMINI_API_KEY."
         # Update the last message with the error
         chat_history[-1] = (user_prompt, error_message)
         return chat_history, initial_bpmn_xml, None
@@ -428,11 +429,11 @@ if __name__ == "__main__":
     # To run this app on your local computer:
     # 1. Create a file named .env in the same directory as this script.
     # 2. Add your Google API key to the .env file like this:
-    #    GOOGLE_API_KEY="your_actual_api_key"
+    #    GEMINI_API_KEY="your_actual_api_key"
     # 3. Run the script from your terminal: python your_script_name.py
     if not GEMINI_API_AVAILABLE:
         print("="*80)
-        print("WARNING: GOOGLE_API_KEY could not be loaded.")
+        print("WARNING: GEMINI_API_KEY could not be loaded.")
         print("The application will run, but the chatbot will not connect to the Gemini API.")
         print("Please create a .env file and add your key.")
         print("="*80)
