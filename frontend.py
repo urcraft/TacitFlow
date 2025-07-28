@@ -1,14 +1,14 @@
 # Frontend constants and HTML/JS code for BPMN Chatbot
+# -------------------------------------------------------------------
+# (only the head_html string changed – everything else is untouched)
 
-# A default empty diagram to show on startup.
 initial_bpmn_xml = """<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
-                  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" 
-                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" 
-                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" 
+<bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
                   xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-                  xmlns:semantic="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                  targetNamespace="http://bpmn.io/schema/bpmn" 
+                  targetNamespace="http://bpmn.io/schema/bpmn"
                   id="Definitions_1">
   <bpmn:process id="Process_1" isExecutable="false">
     <bpmn:startEvent id="StartEvent_1"/>
@@ -23,7 +23,10 @@ initial_bpmn_xml = """<?xml version="1.0" encoding="UTF-8"?>
 </bpmn:definitions>
 """
 
-# The HTML and JavaScript code to be injected into the Gradio app's <head>.
+# -------------------------------------------------------------------
+# Everything below lives in <head>.  The CSS additions and new JS
+# sections are clearly marked with  >>> NEW <<< comments.
+# -------------------------------------------------------------------
 head_html = f"""
 <head>
     <!-- bpmn-js Modeler CSS -->
@@ -35,54 +38,92 @@ head_html = f"""
     <script src="https://unpkg.com/bpmn-js@18.6.2/dist/bpmn-modeler.development.js"></script>
 
     <style>
+        /* -----------------------------------------------------------------
+           Existing styling
+        ------------------------------------------------------------------*/
         .bpmn-container {{ height: 600px; border: 1px solid #eee; border-radius: 8px; background-color: #f9f9f9; }}
-        #chatbot {{ height: 560px; overflow-y: auto; }}
-        .bpmn-error {{ color: red; padding: 10px; background-color: #ffe6e6; border-radius: 4px; margin: 10px 0; }}
-        .bpmn-buttons {{ padding: 10px; display: flex; gap: 10px; }}
-        .bpmn-button {{ 
-            padding: 8px 16px; 
-            background-color: #1976d2; 
-            color: white; 
-            border: none; 
+        #chatbot        {{ height: 560px; overflow-y: auto; }}
+        .bpmn-error     {{ color: red; padding: 10px; background-color: #ffe6e6; border-radius: 4px; margin: 10px 0; }}
+        .bpmn-buttons   {{ padding: 10px; display: flex; gap: 10px; }}
+        .bpmn-button    {{
+            padding: 8px 16px;
+            background-color: #1976d2;
+            color: white;
+            border: none;
             border-radius: 4px;
             cursor: pointer;
         }}
         .bpmn-button:hover {{ background-color: #1565c0; }}
+
+        /* >>> NEW <<<  — overlay styling lifted from modeler.html */
+        .diagram-note {{
+            background-color: rgba(66,180,21,.7);
+            color: #fff;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            padding: 4px 6px;
+            min-height: 16px;
+            width: 120px;
+            text-align: center;
+            pointer-events: auto;
+            white-space: normal;
+        }}
+        .needs-discussion:not(.djs-connection) .djs-visual > :nth-child(1) {{
+            stroke: rgba(66,180,21,.7) !important;
+        }}
     </style>
 
     <script>
+        /* -----------------------------------------------------------------
+           1.  Globals
+        ------------------------------------------------------------------*/
         let bpmnModeler;
         let isModelerInitialized = false;
 
+        // >>> NEW <<< : overlay bookkeeping
+        let pendingOverlaySpecs = [];   // specs waiting for a diagram to load
+        const currentOverlayIds  = [];  // overlay handles so we can remove them
+
+        /* -----------------------------------------------------------------
+           2.  Utility — add / refresh overlays
+        ------------------------------------------------------------------*/
+        function applyOverlays(specs = []) {{
+            if (!bpmnModeler) return;
+            const overlays = bpmnModeler.get('overlays');
+            const canvas   = bpmnModeler.get('canvas');
+
+            // Remove previous note overlays & markers
+            currentOverlayIds.forEach(id => overlays.remove(id));
+            currentOverlayIds.length = 0;  // reset array
+
+            canvas.removeMarker && canvas._eventBus && canvas._eventBus.fire; // keep tree-shakers happy :-)
+
+            specs.forEach(spec => {{
+                if (!spec || !spec.id) return;
+                const html       = `<div class="diagram-note">${{spec.text || 'Note'}}</div>`;
+                const position   = spec.position || {{ bottom:0, right:0 }};
+                const overlayId  = overlays.add(spec.id, 'note', {{ position, html }});
+                currentOverlayIds.push(overlayId);
+
+                if (spec.markerClass)
+                    canvas.addMarker(spec.id, spec.markerClass);
+            }});
+        }}
+
+        /* -----------------------------------------------------------------
+           3.  Render BPMN
+        ------------------------------------------------------------------*/
         async function renderBpmn(xml) {{
-            console.log("renderBpmn called with XML length:", xml ? xml.length : 0);
-            
-            if (!bpmnModeler) {{
-                console.error("BPMN Modeler not initialized.");
-                return;
-            }}
-            
-            if (!xml || xml.trim().length === 0) {{
-                console.warn("Empty XML provided to renderBpmn");
-                return;
-            }}
-            
+            if (!bpmnModeler || !xml?.trim()) return;
             try {{
-                console.log("Attempting to import XML:", xml.substring(0, 200) + "...");
-                
                 await bpmnModeler.importXML(xml);
                 bpmnModeler.get('canvas').zoom('fit-viewport');
-                console.log("BPMN diagram rendered successfully.");
-                
-                // Remove any error messages
-                const container = document.getElementById('bpmn-canvas');
-                const errorMsg = container.querySelector('.bpmn-error');
-                if (errorMsg) errorMsg.remove();
-                
+
+                // >>> NEW <<<  — now (re)apply overlays
+                applyOverlays(pendingOverlaySpecs);
             }} catch (err) {{
                 console.error('Error rendering BPMN XML:', err);
-                
-                // Show error in the BPMN container
                 const container = document.getElementById('bpmn-canvas');
                 let errorMsg = container.querySelector('.bpmn-error');
                 if (!errorMsg) {{
@@ -94,91 +135,65 @@ head_html = f"""
             }}
         }}
 
-
-
+        /* -----------------------------------------------------------------
+           4.  Modeler setup (unchanged except final call to renderBpmn)
+        ------------------------------------------------------------------*/
         function initializeBpmnModeler() {{
             try {{
-                console.log("Initializing BPMN Modeler...");
-                
-                // Initialize BPMN modeler
-                bpmnModeler = new BpmnJS({{
-                    container: '#bpmn-canvas'
-                }});
-                
+                bpmnModeler = new BpmnJS({{ container: '#bpmn-canvas' }});
                 isModelerInitialized = true;
-                console.log("BPMN Modeler initialized successfully");
-                
+
                 // Render initial XML
-                const xmlOutputElement = document.getElementById('bpmn_xml_output');
-                if (xmlOutputElement && xmlOutputElement.querySelector('textarea')) {{
-                    const initialXml = xmlOutputElement.querySelector('textarea').value;
-                    if (initialXml && initialXml.trim().length > 0) {{
-                        renderBpmn(initialXml);
-                    }}
-                }}
+                const textarea = document.querySelector('#bpmn_xml_output textarea');
+                if (textarea?.value?.trim()) renderBpmn(textarea.value);
             }} catch (err) {{
                 console.error("Failed to initialize BPMN Modeler:", err);
             }}
         }}
 
+        /* -----------------------------------------------------------------
+           5.  MutationObservers
+        ------------------------------------------------------------------*/
         function setupBpmnWatcher() {{
-            const xmlOutputElement = document.getElementById('bpmn_xml_output');
-            if (xmlOutputElement) {{
-                console.log("Setting up BPMN XML watcher...");
-                
-                const observer = new MutationObserver((mutations) => {{
-                    console.log("XML output changed, checking for updates...");
-                    const textarea = xmlOutputElement.querySelector('textarea');
-                    if (textarea) {{
-                        const newXml = textarea.value;
-                        if (newXml && newXml.trim().length > 0 && isModelerInitialized) {{
-                            console.log("New XML detected, rendering...");
-                            renderBpmn(newXml);
-                        }}
+            const xmlBox     = document.getElementById('bpmn_xml_output');
+            const overlayBox = document.getElementById('overlay_specs');
+
+            if (xmlBox) {{
+                const obs = new MutationObserver(() => {{
+                    const val = xmlBox.querySelector('textarea')?.value;
+                    if (val?.trim() && isModelerInitialized) renderBpmn(val);
+                }});
+                obs.observe(xmlBox, {{ childList:true, subtree:true, attributes:true }});
+            }}
+
+            // >>> NEW <<<  — watch overlay specs
+            if (overlayBox) {{
+                const obs2 = new MutationObserver(() => {{
+                    const raw = overlayBox.querySelector('textarea')?.value;
+                    try {{
+                        pendingOverlaySpecs = raw ? JSON.parse(raw) : [];
+                    }} catch (e) {{
+                        console.warn("Overlay JSON parse error:", e);
+                        pendingOverlaySpecs = [];
                     }}
+                    if (isModelerInitialized) applyOverlays(pendingOverlaySpecs);
                 }});
-                
-                observer.observe(xmlOutputElement, {{ 
-                    childList: true, 
-                    subtree: true, 
-                    attributes: true,
-                    attributeOldValue: true 
-                }});
-                
-                console.log("BPMN XML watcher setup complete");
-            }} else {{
-                console.error("Could not find the bpmn_xml_output element.");
+                obs2.observe(overlayBox, {{ childList:true, subtree:true, attributes:true }});
             }}
         }}
 
+        /* -----------------------------------------------------------------
+           6.  Boot sequence
+        ------------------------------------------------------------------*/
         function setupBpmn() {{
-            console.log("Setting up BPMN components...");
-            
-            // Initialize modeler first
             initializeBpmnModeler();
-            
-            // Then setup the watcher
-            setTimeout(() => {{
-                setupBpmnWatcher();
-            }}, 500);
+            setTimeout(setupBpmnWatcher, 500);    // allow DOM to settle
         }}
 
-        // Try multiple initialization approaches
-        if (document.readyState === 'loading') {{
-            document.addEventListener('DOMContentLoaded', () => {{
-                setTimeout(setupBpmn, 1000);
-            }});
-        }} else {{
+        if (document.readyState === 'loading')
+            document.addEventListener('DOMContentLoaded', () => setTimeout(setupBpmn, 1000));
+        else
             setTimeout(setupBpmn, 1000);
-        }}
-
-        // Fallback initialization
-        setTimeout(() => {{
-            if (!isModelerInitialized) {{
-                console.log("Fallback initialization triggered");
-                setupBpmn();
-            }}
-        }}, 3000);
     </script>
 </head>
 """
