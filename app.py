@@ -28,7 +28,7 @@ get_bpmn_handler = functools.partial(
 with gr.Blocks(head=head_html, title="BPMN Chatbot") as demo:
     chat_state = gr.State()
     gr.Markdown("# 🤖 BPMN Generation Chatbot")
-    gr.Markdown("Describe a business process and I'll create a BPMN diagram for you…")
+    gr.Markdown("Describe a business process to generate a BPMN diagram. Once you have a model, ask for comments or analysis to identify improvement opportunities for AS-IS to TO-BE transformation.")
 
     with gr.Row():
         with gr.Column(scale=1):

@@ -63,10 +63,10 @@ def _build_system_prompt() -> str:
         ]
         ````
 
-        • **id** – the BPMN element `id` the comment refers to.
-        • **text** – ≤ 60-char note written in second person (“Clarify …”, “Check …”).
-        • **markerClass** – always `"needs-discussion"`.
-        • **position** – optional object with any combination of `top`, `left`, `right`, `bottom` (integers, px offsets).
+        • **id** - the BPMN element `id` the comment refers to.
+        • **text** - ≤ 60-char note written in second person (“Clarify …”, “Check …”).
+        • **markerClass** - always `"needs-discussion"`.
+        • **position** - optional object with any combination of `top`, `left`, `right`, `bottom` (integers, px offsets).
         • If no comments are needed, output an empty array `[]`.
 
         ────────────────────────────────────────  MODELLING GUIDELINES  ─────────────────────────────────
