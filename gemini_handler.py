@@ -68,6 +68,8 @@ def _build_system_prompt() -> str:
         • **markerClass** - always `"needs-discussion"`.
         • **position** - optional object with any combination of `top`, `left`, `right`, `bottom` (integers, px offsets).
         • If no comments are needed, output an empty array `[]`.
+        • **Only create comment objects when the user explicitly asks for comments, feedback, review, critique, or similar. If the user does not request this, return an empty array `[]`.**
+
 
         ────────────────────────────────────────  MODELLING GUIDELINES  ─────────────────────────────────
         • Model the *happy path* first; add exceptions only when described.
