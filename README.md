@@ -2,6 +2,10 @@
 
 A conversational BPMN diagram generator powered by Google Gemini AI. Simply describe your business process in natural language, and TacitFlow will automatically create professional BPMN diagrams for you.
 
+## Demo
+
+[![Watch the video](https://i.imgur.com/example.png)](https://github.com/user-attachments/assets/6f3a0060-b7fc-493c-83cb-93c7115a691b)
+
 ## Features
 
 - 🤖 **AI-Powered Generation**: Describe processes in plain English and get instant BPMN diagrams
@@ -11,33 +15,33 @@ A conversational BPMN diagram generator powered by Google Gemini AI. Simply desc
 
 ## Quick Start
 
-1. **Install dependencies**:
-   ```bash
-   # Using uv (recommended):
-   uv sync
-   
-   # Or using pip:
-   pip install google-genai gradio
-   ```
+1.  **Install dependencies**:
+    ```bash
+    # Using uv (recommended):
+    uv sync
 
-2. **Set up Google Gemini API**:
-   ```bash
-   export GEMINI_API_KEY="your_api_key_here"
-   ```
+    # Or using pip:
+    pip install google-genai gradio
+    ```
 
-3. **Run the application**:
-   ```bash
-   python app.py
-   ```
+2.  **Set up Google Gemini API**:
+    ```bash
+    export GEMINI_API_KEY="your_api_key_here"
+    ```
 
-4. **Open your browser** to the displayed URL (typically `http://localhost:7860`)
+3.  **Run the application**:
+    ```bash
+    python app.py
+    ```
+
+4.  **Open your browser** to the displayed URL (typically `http://localhost:7860`)
 
 ## Usage
 
-1. Describe your business process in the chat interface
-2. Watch as TacitFlow generates a BPMN diagram automatically
-3. Ask for modifications, analysis, or improvements
-4. Export or refine your diagram as needed
+1.  Describe your business process in the chat interface
+2.  Watch as TacitFlow generates a BPMN diagram automatically
+3.  Ask for modifications, analysis, or improvements
+4.  Export or refine your diagram as needed
 
 ## Technology Stack
 
