@@ -1,6 +1,5 @@
 # Frontend constants and HTML/JS code for BPMN Chatbot
 # -------------------------------------------------------------------
-# (only the head_html string changed – everything else is untouched)
 
 initial_bpmn_xml = """<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -23,10 +22,6 @@ initial_bpmn_xml = """<?xml version="1.0" encoding="UTF-8"?>
 </bpmn:definitions>
 """
 
-# -------------------------------------------------------------------
-# Everything below lives in <head>.  The CSS additions and new JS
-# sections are clearly marked with  >>> NEW <<< comments.
-# -------------------------------------------------------------------
 head_html = f"""
 <head>
     <!-- bpmn-js Modeler CSS -->

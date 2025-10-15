@@ -20,11 +20,7 @@ get_bpmn_handler = functools.partial(
     gemini_api_available=GEMINI_API_AVAILABLE
 )
 
-# ------------------------------------------------------------------------
-#  Gradio UI – only two tiny additions:
-#   1. hidden overlay_specs Textbox
-#   2. include it in .then() outputs / inputs
-# ------------------------------------------------------------------------
+
 with gr.Blocks(head=head_html, title="BPMN Chatbot") as demo:
     chat_state = gr.State()
     gr.Markdown("# 🤖 BPMN Generation Chatbot")
@@ -46,15 +42,13 @@ with gr.Blocks(head=head_html, title="BPMN Chatbot") as demo:
             gr.Markdown("## 🖼️ BPMN Diagram Editor")
             gr.HTML('<div id="bpmn-canvas" class="bpmn-container"></div>')
 
-            # Hidden fields (XML existed already, overlay_specs is new)
             bpmn_xml_output = gr.Textbox(value=initial_bpmn_xml,
                                          elem_id="bpmn_xml_output",
                                          visible=False)
             overlay_specs_output = gr.Textbox(value="[]",          # default empty array
                                               elem_id="overlay_specs",
                                               visible=False)
-
-    # -------------------- callback wiring (one extra output) -------------
+    
     def _add_user_msg(user_msg, chat_hist):
         return chat_hist + [[user_msg, None]], ""
 
